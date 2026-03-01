@@ -13,21 +13,19 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set up .NET 10
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: "10.0.x"
-
-      - name: Publish app
-        run: dotnet publish -c Release -o publish
-
-      - name: Create zip
-        run: cd publish && zip -r ../publish.zip .
+      - name: Create source zip
+        run: |
+          zip -r deploy.zip . \
+            --exclude "*.git*" \
+            --exclude "*bin/*" \
+            --exclude "*obj/*" \
+            --exclude "publish-profile.xml" \
+            --exclude ".github/*"
 
       - name: Deploy to Azure via Kudu
         run: |
           curl -X POST \
             https://items-api-cesar-36.scm.azurewebsites.net/api/zipdeploy \
             --user "${{ secrets.AZURE_WEBAPP_USERNAME }}:${{ secrets.AZURE_WEBAPP_PASSWORD }}" \
-            --data-binary @publish.zip \
+            --data-binary @deploy.zip \
             -H "Content-Type: application/octet-stream"
