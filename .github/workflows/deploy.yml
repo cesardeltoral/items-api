@@ -28,4 +28,6 @@ jobs:
             https://items-api-cesar-36.scm.azurewebsites.net/api/zipdeploy \
             --user "${{ secrets.AZURE_WEBAPP_USERNAME }}:${{ secrets.AZURE_WEBAPP_PASSWORD }}" \
             --data-binary @deploy.zip \
-            -H "Content-Type: application/octet-stream"
+            -H "Content-Type: application/octet-stream" \
+            --fail \
+            -w "\nHTTP Status: %{http_code}\n"
