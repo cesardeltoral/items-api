@@ -1,57 +1,55 @@
 using ItemsApi.Models;
-using Scalar.AspNetCore;         
+using ItemsApi.Services;
+using Microsoft.Azure.Cosmos;
+using Scalar.AspNetCore;
 
 var builder = WebApplication.CreateBuilder(args);
-builder.Services.AddOpenApi();    
+builder.Services.AddOpenApi();
+
+// Register Cosmos DB client as singleton (expensive to create, safe to reuse)
+var connectionString = builder.Configuration["CosmosDb:ConnectionString"]!;
+builder.Services.AddSingleton(new CosmosClient(connectionString));
+builder.Services.AddSingleton<ItemService>();
+
 var app = builder.Build();
 
-// In-memory list using our model
-var items = new List<Item>
-{
-    new Item { Id = 1, Title = "Apple", IsComplete = false },
-    new Item { Id = 2, Title = "Banana", IsComplete = false },
-    new Item { Id = 3, Title = "Cherry", IsComplete = true },
-};
-var nextId = 4;
+app.MapOpenApi();
+app.MapScalarApiReference();
 
-app.MapOpenApi();                  
-app.MapScalarApiReference();       
-
-// GET /items — return all items
-app.MapGet("/items", async () =>
+// GET /items
+app.MapGet("/items", async (ItemService svc) =>
 {
-    await Task.Delay(100);
+    var items = await svc.GetAllAsync();
     return Results.Ok(items);
 });
 
-// POST /items — add a new item (body: { "title": "..." })
-app.MapPost("/items", async (CreateItemRequest request) =>
+// GET /items/{id}
+app.MapGet("/items/{id}", async (string id, ItemService svc) =>
 {
-    await Task.Delay(100);
-    var item = new Item { Id = nextId++, Title = request.Title, IsComplete = false };
-    items.Add(item);
+    var item = await svc.GetByIdAsync(id);
+    return item is null ? Results.NotFound() : Results.Ok(item);
+});
+
+// POST /items
+app.MapPost("/items", async (CreateItemRequest request, ItemService svc) =>
+{
+    var item = await svc.CreateAsync(request.Title);
     return Results.Created($"/items/{item.Id}", item);
 });
 
-// DELETE /items/{id} — delete by numeric Id
-app.MapDelete("/items/{id}", async (int id) =>
+// PUT /items/{id}
+app.MapPut("/items/{id}", async (string id, UpdateItemRequest request, ItemService svc) =>
 {
-    await Task.Delay(100);
-    var item = items.FirstOrDefault(x => x.Id == id);
-    if (item is null) return Results.NotFound();
-    items.Remove(item);
-    return Results.NoContent();
+    var item = await svc.UpdateAsync(id, request.Title, request.IsComplete);
+    return item is null ? Results.NotFound() : Results.Ok(item);
 });
 
- // PUT /items/{id} — update title and/or isComplete
- app.MapPut("/items/{id}", async (int id, UpdateItemRequest request) =>
- {
-     await Task.Delay(100);
-     var item = items.FirstOrDefault(x => x.Id == id);
-     if (item is null) return Results.NotFound();
-     item.Title = request.Title;
-     item.IsComplete = request.IsComplete;
-     return Results.Ok(item);
- });
+// DELETE /items/{id}
+app.MapDelete("/items/{id}", async (string id, ItemService svc) =>
+{
+    var deleted = await svc.DeleteAsync(id);
+    return deleted ? Results.NoContent() : Results.NotFound();
+});
 
 app.Run();
+
